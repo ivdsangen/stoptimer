@@ -185,8 +185,7 @@ def display_update(win):
         prstr_center(
           win,
           cy,
-          (('Stopped ' + fmt(left + time.time() - stop_time)),
-          fmt(left))
+          (('Stopped ' + fmt(left + time.time() - stop_time)) - fmt(left))
         )
     else:
       prstr_center(win, cy, 'Off '+ fmt(set_time))
