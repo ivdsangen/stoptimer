@@ -1,0 +1,436 @@
+#!/usr/bin/python
+#
+# Author: Ivo van der Sangen
+
+config_enabled = False
+config = ()
+try:
+  import configparser
+  config = configparser.ConfigParser()
+  config_enabled = True
+except:
+  try:
+    import ConfigParser
+    config = ConfigParser.ConfigParser()
+    config_enabled = True
+  except:
+    print 'no module configparser or ConfigParser found, not loading ini file'
+
+import curses
+import getopt
+import os
+import signal
+import struct
+import sys
+import thread
+import time
+
+global maxx
+global maxy
+global out
+global save_to_file
+global set_time
+global start_time
+global state
+global stop_time
+global _win
+
+class CDException(Exception):
+  pass
+
+# Source getTerminalSize()
+# https://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
+def getTerminalSize():
+    env = os.environ
+    def ioctl_GWINSZ(fd):
+        try:
+            import fcntl, termios
+            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,
+        '1234'))
+        except:
+            return
+        return cr
+    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
+    if not cr:
+        try:
+            fd = os.open(os.ctermid(), os.O_RDONLY)
+            cr = ioctl_GWINSZ(fd)
+            os.close(fd)
+        except:
+            pass
+    if not cr:
+        cr = (env.get('LINES', 25), env.get('COLUMNS', 80))
+
+        ### Use get(key[, default]) instead of a try/catch
+        #try:
+        #    cr = (env['LINES'], env['COLUMNS'])
+        #except:
+        #    cr = (25, 80)
+    return int(cr[1]), int(cr[0])
+
+def set(mins):
+
+  global set_time
+  global state
+
+  try:
+    mins = int(mins)
+  except ValueError:
+    raise CDException('s : enter time in minutes')
+  set_time = 60 * mins
+
+  state = 'off'
+
+def start():
+
+  global set_time
+  global start_time
+  global state
+
+  if state != 'stopped':
+    start_time = time.time()
+  else:
+    set_time += time.time() - stop_time
+  state = 'on'
+
+def stop():
+
+  global state
+  global stop_time
+
+  stop_time = time.time()
+  state = 'stopped'
+
+def inc(mins):
+
+  global set_time
+
+  try:
+    mins = int(mins)
+  except ValueError:
+    raise CDException('+ : enter time in minutes')
+  set_time += 60 * mins
+
+def dec(mins):
+
+  global set_time
+
+  try:
+    mins = int(mins)
+  except ValueError:
+    raise CDException('- : enter time in minutes')
+  set_time -= 60 * mins
+
+def save():
+  
+  f = open(CDTIMER_SAVE_FILE, 'w')
+  f.write(`set_time` + '\n')
+  f.write(`start_time` + '\n')
+  f.write(`stop_time` + '\n')
+  f.close()
+
+def load():
+  
+  global set_time
+  global start_time
+  global state
+  global stop_time
+
+  f = open(CDTIMER_SAVE_FILE, 'r')
+  set_time = float(f.readline())
+  start_time = float(f.readline())
+  stop_time = float(f.readline())
+  f.close()
+
+  state = 'stopped'
+
+def fmt(t):
+  t = int(t)
+  secs = (t % 60)
+  mins = ((t/60)%60)
+  hours = (t/3600)
+  
+  s = ''
+  s += `hours` + ':'
+  if mins < 10:
+    s += '0'
+  s += `mins` + ':'
+  if secs < 10:
+    s += '0'
+  s += `secs`
+  return s
+
+def prstr_center(win, y, s):
+  
+  if y >= maxy:
+    return
+  if len(s) >= maxx:
+    return
+  win.addstr(y, maxx/2 - len(s)/2, s)
+
+def display_update(win):
+
+  while 1:
+
+    win.erase()
+
+    cy = maxy/2
+
+    if state != 'off':
+      left = set_time - (time.time()-start_time)
+      done = left < 0
+      if done:
+        prstr_center(win, cy, 'Done')
+      else:
+        prstr_center(
+          win,
+          cy,
+          (('Stopped ' + fmt(left + time.time() - stop_time)),
+          fmt(left))
+        )
+    else:
+      prstr_center(win, cy, 'Off '+ fmt(set_time))
+    
+    prstr_center(win, cy+2, 'Space - Start/stop countdown')
+    prstr_center(win, cy+3, 'Ctrl-c - Exit')
+    prstr_center(win, cy+4, 'sN - \'s\' then a number to (re)set minutes')
+    prstr_center(win, cy+5, '+N - \'+\' then a number to increase minutes')
+    prstr_center(win, cy+6, '-N - \'-\' then a number to decrease minutes')
+    
+    win.refresh()
+
+    time.sleep(.1)
+
+def main_update(win):
+
+  while 1:
+    
+    cy, cx = maxy, 0
+
+    try:
+
+      c = win.getch(cy-1, cx)
+      if c == ord('s'):
+        s = win.getstr(cy-1, cx+1, 128)
+        set(s)
+      elif c == 32:
+        start() if state != 'on' else stop()
+      elif c == ord('+'):
+        s = win.getstr(cy-1,cx+1, 128)
+        inc(s)
+      elif c == ord('-'):
+        s = win.getstr(cy-1,cx+1, 128)
+        dec(s)
+      elif c == 27:
+        if save_to_file:
+          stop()
+          save()
+          start()
+      else:
+        curses.beep()
+   
+    except CDException:
+      pass
+
+def outf():
+
+  global out
+
+  stop()
+  if save_to_file:
+    save()
+  out = True
+ 
+
+def sigint_handler(signal, frame):
+
+  outf()
+
+def sigwinch_handler(signal, frame):
+
+  global maxx
+  global maxy
+
+  
+  curses.endwin()
+
+  maxx, maxy = getTerminalSize()
+
+  curses.initscr() 
+
+
+def sighub_handler(signal, frame):
+  
+  outf()
+
+def run(win):
+
+  global maxx
+  global maxy
+  global out
+  global set_time
+  global state
+  global _win
+
+  _win = win
+
+  signal.signal(signal.SIGINT, sigint_handler)
+  signal.signal(signal.SIGWINCH, sigwinch_handler)
+  signal.signal(signal.SIGHUP, sighub_handler)
+
+  curses.curs_set(0)
+
+  maxy, maxx = win.getmaxyx()
+
+  thread.start_new_thread(display_update,(win,))
+  thread.start_new_thread(main_update,(win,))
+
+  while 1:
+    if out:
+      return
+    time.sleep(.1)
+
+def conf_err(msg):
+  print ('config: ' + msg)
+  sys.exit(1)
+
+def usage():
+  print USAGE
+  sys.exit(2)
+
+out = False
+set_time = 0
+state ='off'
+auto = False
+load_from_file = True
+save_to_file = True
+start_time = time.time()
+stop_time = start_time
+
+HOME = os.path.expanduser("~")
+CONFIG_DIR = HOME + '/.config'
+CDTIMER_CONFIG_DIR = CONFIG_DIR + '/cdtimer'
+CDTIMER_CONFIG_FILE = CDTIMER_CONFIG_DIR + '/cdtimer.ini'
+CDTIMER_SAVE_FILE = CDTIMER_CONFIG_DIR + '/save'
+
+if not(os.path.isdir(CDTIMER_CONFIG_DIR)):
+  if not(os.path.isdir(CONFIG_DIR)):
+    os.mkdir(CONFIG_DIR, 0755)
+  os.mkdir(CDTIMER_CONFIG_DIR, 0755)
+
+load_c = '-1'
+time_c = -1
+
+if config_enabled and os.path.isfile(CDTIMER_CONFIG_FILE):
+  config.read(CDTIMER_CONFIG_FILE)
+  try:
+    auto_c = config.get('Main', 'auto')
+    if auto_c == '1':
+      auto = True
+    elif auto_c != '0':
+      conf_err('value for auto must be 0 or 1')
+  except Exception:
+    pass
+  try:
+    time_c = int(config.get('Main', 'time'))
+    set(time_c)
+  except ValueError:
+    conf_err('value for time must be integer')
+  except Exception:
+    pass
+  try:
+    load_c = config.get('Main', 'load')
+    if load_c == '0':
+      load_from_file = False
+    elif load_c != '1':
+      conf_err('value for load must be 0 or 1')
+  except Exception:
+    pass
+  try:
+    save_c = config.get('Main', 'save')
+    if save_c == '0':
+      save_to_file = False
+    elif save_c != '1':
+      conf_err('value for save must be 0 or 1')
+  except Exception:
+    pass
+  if time_c != -1 and load_c == '1':
+    conf_err('can not set both time and load from file in config')
+elif os.path.isfile(CDTIMER_CONFIG_FILE) and not(config_enabled):
+  print 'warning: no module configparser or ConfigParser found, not loading ini file'
+
+USAGE = """USAGE: cdtimer
+  [-h | --help] - get this message
+  [-a | --auto flag] - start automatically on startup (default: 0)
+  [-t | --time minutes] - set the countdown time in minutes (default: 0)
+  [-l | --load flag ] - load from file (default: 1)
+  [-s | --save flag ] - save to file (default: 1)"""
+
+try:
+
+  time_p = False
+  load_p = -1
+
+  if len(sys.argv) > 1:
+    opts, args = getopt.getopt(
+      sys.argv[1:],
+      'a:t:l:s:',
+      [ "auto=", "time=", "load=", "save=" ]
+    )
+    for opt, arg in opts:
+      if opt in [ "-h", "--help"]:
+        usage()
+      elif opt in [ "-a", "--auto"]:
+        if arg == '1':
+          auto = True
+        elif arg == '0':
+          auto = False
+        else:
+          usage()
+      elif opt in [ "-t", "--time"]:
+         mins = 0
+         try:
+           mins = int(arg)
+         except ValueError:
+           usage()
+         set(mins)
+         time_p = True
+      elif opt in [ "-l", "--load"]:
+        if arg == '0':
+          load_p = 0
+          load_from_file = False
+        elif arg == '1':
+          load_from_file = True
+          load_p = 1
+        else:
+          usage()
+      elif opt in [ "-s", "--save"]:
+        if arg == '0':
+          save_to_file = False
+        elif arg == '1':
+          save_to_file = True
+        else:
+          print usage()
+      else:
+        print 'Unrecognized option'
+        usage()
+  
+  if load_p == 1 and time_p:
+    print """Can not use time supplied and load time from disk at the same time."""
+    sys.exit(3)
+
+  if time_c == -1 and not(time_p) and load_from_file and os.path.isfile(CDTIMER_SAVE_FILE):
+    load()
+
+  if time_c != -1 and load_from_file:
+    print 'Warning: not loading from file due to time set in configuration'
+    
+  if auto:
+    start()   
+
+        
+except Exception as e:
+  print 'Error: ' + e.args
+  usage()
+
+curses.wrapper(run)
