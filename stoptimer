@@ -14,7 +14,7 @@ except:
     config = ConfigParser.ConfigParser()
     config_enabled = True
   except:
-    print 'no module configparser or ConfigParser found, not loading ini file'
+    print('no module configparser or ConfigParser found, not loading ini file')
 
 import curses
 import getopt
@@ -22,7 +22,7 @@ import os
 import signal
 import struct
 import sys
-import thread
+import threading
 import time
 
 global maxx
@@ -123,10 +123,10 @@ def dec(mins):
 
 def save():
   
-  f = open(CDTIMER_SAVE_FILE, 'w')
-  f.write(`set_time` + '\n')
-  f.write(`start_time` + '\n')
-  f.write(`stop_time` + '\n')
+  f = open(STOPTIMER_SAVE_FILE, 'w')
+  f.write(str(set_time) + '\n')
+  f.write(str(start_time) + '\n')
+  f.write(str(stop_time) + '\n')
   f.close()
 
 def load():
@@ -136,7 +136,7 @@ def load():
   global state
   global stop_time
 
-  f = open(CDTIMER_SAVE_FILE, 'r')
+  f = open(STOPTIMER_SAVE_FILE, 'r')
   set_time = float(f.readline())
   start_time = float(f.readline())
   stop_time = float(f.readline())
@@ -147,17 +147,17 @@ def load():
 def fmt(t):
   t = int(t)
   secs = (t % 60)
-  mins = ((t/60)%60)
-  hours = (t/3600)
+  mins = (int(t/60)%60)
+  hours = int(t/3600)
   
   s = ''
-  s += `hours` + ':'
+  s += str(hours) + ':'
   if mins < 10:
     s += '0'
-  s += `mins` + ':'
+  s += str(mins) + ':'
   if secs < 10:
     s += '0'
-  s += `secs`
+  s += str(secs)
   return s
 
 def prstr_center(win, y, s):
@@ -166,11 +166,13 @@ def prstr_center(win, y, s):
     return
   if len(s) >= maxx:
     return
-  win.addstr(y, maxx/2 - len(s)/2, s)
+  win.addstr(int(y), int(maxx/2 - len(s)/2), s)
 
 def display_update(win):
 
-  while 1:
+  global out
+
+  while not(out):
 
     win.erase()
 
@@ -181,13 +183,14 @@ def display_update(win):
       done = left < 0
       if done:
         prstr_center(win, cy, 'Done')
-      else:
+      elif state == 'stopped':
         prstr_center(
           win,
           cy,
-          (('Stopped ' + fmt(left + time.time() - stop_time)),
-          fmt(left))
+          ('Stopped ' + fmt(left + time.time() - stop_time))
         )
+      else:
+        prstr_center(win, cy, fmt(left))
     else:
       prstr_center(win, cy, 'Off '+ fmt(set_time))
     
@@ -203,8 +206,10 @@ def display_update(win):
 
 def main_update(win):
 
-  while 1:
-    
+  global out
+
+  while not(out):
+
     cy, cx = maxy, 0
 
     try:
@@ -282,11 +287,18 @@ def run(win):
 
   maxy, maxx = win.getmaxyx()
 
-  thread.start_new_thread(display_update,(win,))
-  thread.start_new_thread(main_update,(win,))
+  display_thread = threading.Thread(target=display_update,args=(win,))
+  main_thread = threading.Thread(target=main_update,args=(win,))
+
+  display_thread.start()
+  main_thread.start()
 
   while 1:
     if out:
+      curses.nocbreak()
+      win.keypad(False)
+      curses.echo()
+      curses.endwin()
       return
     time.sleep(.1)
 
@@ -295,7 +307,7 @@ def conf_err(msg):
   sys.exit(1)
 
 def usage():
-  print USAGE
+  print(USAGE)
   sys.exit(2)
 
 out = False
@@ -309,20 +321,20 @@ stop_time = start_time
 
 HOME = os.path.expanduser("~")
 CONFIG_DIR = HOME + '/.config'
-CDTIMER_CONFIG_DIR = CONFIG_DIR + '/cdtimer'
-CDTIMER_CONFIG_FILE = CDTIMER_CONFIG_DIR + '/cdtimer.ini'
-CDTIMER_SAVE_FILE = CDTIMER_CONFIG_DIR + '/save'
+STOPTIMER_CONFIG_DIR = CONFIG_DIR + '/cdtimer'
+STOPTIMER_CONFIG_FILE = STOPTIMER_CONFIG_DIR + '/cdtimer.ini'
+STOPTIMER_SAVE_FILE = STOPTIMER_CONFIG_DIR + '/save'
 
-if not(os.path.isdir(CDTIMER_CONFIG_DIR)):
+if not(os.path.isdir(STOPTIMER_CONFIG_DIR)):
   if not(os.path.isdir(CONFIG_DIR)):
-    os.mkdir(CONFIG_DIR, 0755)
-  os.mkdir(CDTIMER_CONFIG_DIR, 0755)
+    os.mkdir(CONFIG_DIR, 0o755)
+  os.mkdir(STOPTIMER_CONFIG_DIR, 0o755)
 
 load_c = '-1'
 time_c = -1
 
-if config_enabled and os.path.isfile(CDTIMER_CONFIG_FILE):
-  config.read(CDTIMER_CONFIG_FILE)
+if config_enabled and os.path.isfile(STOPTIMER_CONFIG_FILE):
+  config.read(STOPTIMER_CONFIG_FILE)
   try:
     auto_c = config.get('Main', 'auto')
     if auto_c == '1':
@@ -356,10 +368,10 @@ if config_enabled and os.path.isfile(CDTIMER_CONFIG_FILE):
     pass
   if time_c != -1 and load_c == '1':
     conf_err('can not set both time and load from file in config')
-elif os.path.isfile(CDTIMER_CONFIG_FILE) and not(config_enabled):
-  print 'warning: no module configparser or ConfigParser found, not loading ini file'
+elif os.path.isfile(STOPTIMER_CONFIG_FILE) and not(config_enabled):
+  print('warning: no module configparser or ConfigParser found, not loading ini file')
 
-USAGE = """USAGE: cdtimer
+USAGE = """USAGE: stoptimer
   [-h | --help] - get this message
   [-a | --auto flag] - start automatically on startup (default: 0)
   [-t | --time minutes] - set the countdown time in minutes (default: 0)
@@ -410,27 +422,27 @@ try:
         elif arg == '1':
           save_to_file = True
         else:
-          print usage()
+          print(usage())
       else:
-        print 'Unrecognized option'
+        print('Unrecognized option')
         usage()
   
   if load_p == 1 and time_p:
-    print """Can not use time supplied and load time from disk at the same time."""
+    print("""Can not use time supplied and load time from disk at the same time.""")
     sys.exit(3)
 
-  if time_c == -1 and not(time_p) and load_from_file and os.path.isfile(CDTIMER_SAVE_FILE):
+  if time_c == -1 and not(time_p) and load_from_file and os.path.isfile(STOPTIMER_SAVE_FILE):
     load()
 
   if time_c != -1 and load_from_file:
-    print 'Warning: not loading from file due to time set in configuration'
+    print('Warning: not loading from file due to time set in configuration')
     
   if auto:
     start()   
 
         
 except Exception as e:
-  print 'Error: ' + e.args
+  print('Error: ' + e)
   usage()
 
 curses.wrapper(run)
