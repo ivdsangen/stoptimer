@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/local/bin/python3.9
 #
 # Author: Ivo van der Sangen
 
@@ -284,6 +284,7 @@ def run(win):
   signal.signal(signal.SIGHUP, sighub_handler)
 
   curses.curs_set(0)
+  curses.use_default_colors()
 
   maxy, maxx = win.getmaxyx()
 
@@ -321,8 +322,8 @@ stop_time = start_time
 
 HOME = os.path.expanduser("~")
 CONFIG_DIR = HOME + '/.config'
-STOPTIMER_CONFIG_DIR = CONFIG_DIR + '/cdtimer'
-STOPTIMER_CONFIG_FILE = STOPTIMER_CONFIG_DIR + '/cdtimer.ini'
+STOPTIMER_CONFIG_DIR = CONFIG_DIR + '/stoptimer'
+STOPTIMER_CONFIG_FILE = STOPTIMER_CONFIG_DIR + '/stoptimer.ini'
 STOPTIMER_SAVE_FILE = STOPTIMER_CONFIG_DIR + '/save'
 
 if not(os.path.isdir(STOPTIMER_CONFIG_DIR)):
