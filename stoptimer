@@ -35,7 +35,7 @@ global state
 global stop_time
 global _win
 
-class CDException(Exception):
+class StopTimerException(Exception):
   pass
 
 # Source getTerminalSize()
@@ -76,7 +76,7 @@ def set(mins):
   try:
     mins = int(mins)
   except ValueError:
-    raise CDException('s : enter time in minutes')
+    raise StopTimerException('s : enter time in minutes')
   set_time = 60 * mins
 
   state = 'off'
@@ -108,7 +108,7 @@ def inc(mins):
   try:
     mins = int(mins)
   except ValueError:
-    raise CDException('+ : enter time in minutes')
+    raise StopTimerException('+ : enter time in minutes')
   set_time += 60 * mins
 
 def dec(mins):
@@ -118,7 +118,7 @@ def dec(mins):
   try:
     mins = int(mins)
   except ValueError:
-    raise CDException('- : enter time in minutes')
+    raise StopTimerException('- : enter time in minutes')
   set_time -= 60 * mins
 
 def save():
@@ -234,7 +234,7 @@ def main_update(win):
       else:
         curses.beep()
    
-    except CDException:
+    except StopTimerException:
       pass
 
 def outf():
@@ -373,9 +373,9 @@ elif os.path.isfile(STOPTIMER_CONFIG_FILE) and not(config_enabled):
   print('warning: no module configparser or ConfigParser found, not loading ini file')
 
 USAGE = """USAGE: stoptimer
-  [-h | --help] - get this message
-  [-a | --auto flag] - start automatically on startup (default: 0)
-  [-t | --time minutes] - set the countdown time in minutes (default: 0)
+  [-h ] - get this message
+  [-a | --auto flag ] - start automatically on startup (default: 0)
+  [-t | --time minutes ] - set the countdown time in minutes (default: 0)
   [-l | --load flag ] - load from file (default: 1)
   [-s | --save flag ] - save to file (default: 1)"""
 
@@ -387,11 +387,11 @@ try:
   if len(sys.argv) > 1:
     opts, args = getopt.getopt(
       sys.argv[1:],
-      'a:t:l:s:',
+      'ha:t:l:s:',
       [ "auto=", "time=", "load=", "save=" ]
     )
     for opt, arg in opts:
-      if opt in [ "-h", "--help"]:
+      if opt in [ "-h"]:
         usage()
       elif opt in [ "-a", "--auto"]:
         if arg == '1':
@@ -443,7 +443,6 @@ try:
 
         
 except Exception as e:
-  print('Error: ' + e)
   usage()
 
 curses.wrapper(run)
