@@ -195,7 +195,7 @@ def display_update(win):
             prstr_center(win, cy, 'Off '+ fmt(set_time))
     
         prstr_center(win, cy+2, 'Space - Start/stop countdown')
-        prstr_center(win, cy+3, 'Ctrl-c - Exit')
+        prstr_center(win, cy+3, 'q - Exit')
         prstr_center(win, cy+4, 'sN - \'s\' then a number to (re)set minutes')
         prstr_center(win, cy+5, '+N - \'+\' then a number to increase minutes')
         prstr_center(win, cy+6, '-N - \'-\' then a number to decrease minutes')
@@ -231,6 +231,8 @@ def main_update(win):
                     stop()
                     save()
                     start()
+            elif c == ord('q'):
+                out = True
             else:
                 curses.beep()
    
@@ -278,10 +280,6 @@ def run(win):
     global _win
 
     _win = win
-
-    signal.signal(signal.SIGINT, sigint_handler)
-    signal.signal(signal.SIGWINCH, sigwinch_handler)
-    signal.signal(signal.SIGHUP, sighub_handler)
 
     curses.curs_set(0)
     curses.use_default_colors()
@@ -444,5 +442,9 @@ try:
         
 except Exception as e:
     usage()
+
+signal.signal(signal.SIGINT, sigint_handler)
+signal.signal(signal.SIGWINCH, sigwinch_handler)
+signal.signal(signal.SIGHUP, sighub_handler)
 
 curses.wrapper(run)
