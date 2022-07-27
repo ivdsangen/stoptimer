@@ -294,6 +294,7 @@ def run(win):
 
     while 1:
         if out:
+            outf()
             curses.nocbreak()
             win.keypad(False)
             curses.echo()
