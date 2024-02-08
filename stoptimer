@@ -1,4 +1,4 @@
-#!/usr/local/bin/python3.9
+#!/usr/local/bin/python3
 #
 # Author: Ivo van der Sangen
 
@@ -34,39 +34,14 @@ global start_time
 global state
 global stop_time
 global _win
+global lock
 
 class StopTimerException(Exception):
     pass
 
-# Source getTerminalSize()
-# https://stackoverflow.com/questions/566746/how-to-get-console-window-width-in-python
 def getTerminalSize():
-    env = os.environ
-    def ioctl_GWINSZ(fd):
-        try:
-            import fcntl, termios
-            cr = struct.unpack('hh', fcntl.ioctl(fd, termios.TIOCGWINSZ,
-        '1234'))
-        except:
-            return
-        return cr
-    cr = ioctl_GWINSZ(0) or ioctl_GWINSZ(1) or ioctl_GWINSZ(2)
-    if not cr:
-        try:
-            fd = os.open(os.ctermid(), os.O_RDONLY)
-            cr = ioctl_GWINSZ(fd)
-            os.close(fd)
-        except:
-            pass
-    if not cr:
-        cr = (env.get('LINES', 25), env.get('COLUMNS', 80))
-
-        ### Use get(key[, default]) instead of a try/catch
-        #try:
-        #    cr = (env['LINES'], env['COLUMNS'])
-        #except:
-        #    cr = (25, 80)
-    return int(cr[1]), int(cr[0])
+    terminal_size = os.get_terminal_size()
+    return terminal_size[0], terminal_size[1]
 
 def set(mins):
 
@@ -161,16 +136,25 @@ def fmt(t):
     return s
 
 def prstr_center(win, y, s):
-  
+
+    global maxy
+    global maxx
+    global lock
+
+    while lock:
+        sleep(.1)
+
     if y >= maxy:
         return
     if len(s) >= maxx:
         return
+    
     win.addstr(int(y), int(maxx/2 - len(s)/2), s)
 
 def display_update(win):
 
     global out
+    global maxy
 
     while not(out):
 
@@ -207,6 +191,9 @@ def display_update(win):
 def main_update(win):
 
     global out
+    global maxx
+    global maxy
+    global lock
 
     while not(out):
 
@@ -233,6 +220,13 @@ def main_update(win):
                     start()
             elif c == ord('q'):
                 out = True
+            elif c == curses.KEY_RESIZE:
+                lock = True
+                maxy, maxx = win.getmaxyx()
+                curses.resize_term(maxy, maxx)
+                win.clear()
+                win.refresh()
+                lock = False
             else:
                 curses.beep()
    
@@ -253,19 +247,6 @@ def sigint_handler(signal, frame):
 
     outf()
 
-def sigwinch_handler(signal, frame):
-
-    global maxx
-    global maxy
-
-  
-    curses.endwin()
-
-    maxx, maxy = getTerminalSize()
-
-    curses.initscr() 
-
-
 def sighub_handler(signal, frame):
   
     outf()
@@ -278,6 +259,7 @@ def run(win):
     global set_time
     global state
     global _win
+    global lock
 
     _win = win
 
@@ -313,6 +295,7 @@ def usage():
     print(USAGE)
     sys.exit(2)
 
+lock=False
 out = False
 set_time = 0
 state ='off'
@@ -448,7 +431,6 @@ except Exception as e:
     usage()
 
 signal.signal(signal.SIGINT, sigint_handler)
-signal.signal(signal.SIGWINCH, sigwinch_handler)
 signal.signal(signal.SIGHUP, sighub_handler)
 
 curses.wrapper(run)
