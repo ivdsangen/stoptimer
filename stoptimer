@@ -34,7 +34,6 @@ global start_time
 global state
 global stop_time
 global _win
-global lock
 
 class StopTimerException(Exception):
     pass
@@ -139,10 +138,6 @@ def prstr_center(win, y, s):
 
     global maxy
     global maxx
-    global lock
-
-    while lock:
-        sleep(.1)
 
     if y >= maxy:
         return
@@ -193,7 +188,6 @@ def main_update(win):
     global out
     global maxx
     global maxy
-    global lock
 
     while not(out):
 
@@ -221,12 +215,10 @@ def main_update(win):
             elif c == ord('q'):
                 out = True
             elif c == curses.KEY_RESIZE:
-                lock = True
                 maxy, maxx = win.getmaxyx()
                 curses.resize_term(maxy, maxx)
                 win.clear()
                 win.refresh()
-                lock = False
             else:
                 curses.beep()
    
