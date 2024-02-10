@@ -251,7 +251,6 @@ def run(win):
     global set_time
     global state
     global _win
-    global lock
 
     _win = win
 
@@ -287,7 +286,6 @@ def usage():
     print(USAGE)
     sys.exit(2)
 
-lock=False
 out = False
 set_time = 0
 state ='off'
